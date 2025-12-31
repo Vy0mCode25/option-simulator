@@ -1,61 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>NIFTY Option Purchase Simulator</title>
+  <meta charset="UTF-8">
+  <title>NIFTY Option Full Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f6f8;
-      padding: 20px;
-    }
-    .card {
-      max-width: 600px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    h2 { text-align: center; }
-    label { font-weight: bold; }
-    input, select {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0 15px 0;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    button:hover { background: #1e40af; }
-    .result {
-      margin-top: 20px;
-      padding: 15px;
-      background: #f1f5f9;
-      border-radius: 8px;
-    }
-    .green { color: green; font-weight: bold; }
-    .red { color: red; font-weight: bold; }
+    body { font-family: Arial, sans-serif; background:#f4f6f8; padding:20px; }
+    .card { max-width:700px; margin:auto; background:#fff; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+    h2 { text-align:center; }
+    label { font-weight:bold; margin-top:10px; display:block; }
+    input, select, button { width:100%; padding:10px; margin:8px 0 15px 0; border-radius:6px; border:1px solid #ccc; }
+    button { background:#2563eb; color:white; border:none; font-size:16px; cursor:pointer; }
+    button:hover { background:#1e40af; }
+    .result { margin-top:20px; padding:15px; background:#f1f5f9; border-radius:8px; }
+    .green { color:green; font-weight:bold; }
+    .red { color:red; font-weight:bold; }
+    canvas { margin-top:15px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>📊 Option Purchase Simulator</h2>
+    <h2>Options Analysis & Recommendation Tool</h2>
 
-    <label>NIFTY Spot (Open Price)</label>
-    <input type="number" id="spot" placeholder="e.g. 26200" />
+    <label>Last NIFTY Close</label>
+    <input type="number" id="lastClose" placeholder="e.g. 26185" value="26185">
+
+    <label>Today's NIFTY Spot</label>
+    <input type="number" id="spot" placeholder="e.g. 26190" value="26190">
 
     <label>Strike Price</label>
-    <input type="number" id="strike" placeholder="e.g. 26100" />
+    <input type="number" id="strike" placeholder="e.g. 26100" value="26100">
 
     <label>Option Type</label>
     <select id="type">
@@ -63,56 +37,91 @@
       <option value="PE">Put (PE)</option>
     </select>
 
-    <label>Option LTP (Current Premium)</label>
-    <input type="number" id="ltp" placeholder="e.g. 150" />
+    <label>Option LTP</label>
+    <input type="number" id="ltp" placeholder="e.g. 150" value="150">
 
-    <button onclick="analyze()">Run Simulation</button>
+    <label>Expiry</label>
+    <select id="expiry">
+      <option value="Weekly">Weekly</option>
+      <option value="Monthly">Monthly</option>
+    </select>
+
+    <button onclick="runAnalysis()">Run Simulation</button>
 
     <div class="result" id="result" style="display:none"></div>
+
+    <canvas id="rangeChart" width="600" height="100"></canvas>
   </div>
 
   <script>
-    function analyze() {
+    function runAnalysis(){
+      const lastClose = parseFloat(document.getElementById('lastClose').value);
       const spot = parseFloat(document.getElementById('spot').value);
       const strike = parseFloat(document.getElementById('strike').value);
       const ltp = parseFloat(document.getElementById('ltp').value);
       const type = document.getElementById('type').value;
+      const expiry = document.getElementById('expiry').value;
 
-      if (isNaN(spot) || isNaN(strike) || isNaN(ltp)) {
-        alert('Please fill all fields');
-        return;
-      }
+      if(isNaN(lastClose)||isNaN(spot)||isNaN(strike)||isNaN(ltp)){ alert('Fill all fields'); return; }
 
-      let intrinsic = 0;
-      if (type === 'CE') intrinsic = Math.max(spot - strike, 0);
-      else intrinsic = Math.max(strike - spot, 0);
+      // Trend calculation
+      let trend = (spot - lastClose) > 0 ? 'Bullish (Uptrend)' : 'Bearish (Downtrend)';
+      let expectedHigh = spot + 120;
+      let expectedLow = spot - 120;
 
-      let timeValue = ltp - intrinsic;
-      if (timeValue < 0) timeValue = 0;
+      // Option calculations
+      let intrinsic = type==='CE' ? Math.max(spot-strike,0) : Math.max(strike-spot,0);
+      let timeValue = Math.max(ltp-intrinsic,0);
+      let delta = type==='CE' ? 0.6+intrinsic/100 : -0.6-intrinsic/100;
+      let theta = -8 * (expiry==='Weekly'?1:2);
+      let ivNote = timeValue>40?'High':'Moderate';
 
-      const idealBuyLow = Math.max(ltp - 20, intrinsic + 5);
-      const idealBuyHigh = Math.max(ltp - 5, intrinsic + 10);
+      let buyLow = Math.max(ltp-20, intrinsic+5);
+      let buyHigh = Math.max(ltp-5, intrinsic+10);
+      let holdTarget = ltp + Math.round(timeValue*0.6);
+      let stopLoss = Math.round(ltp*0.75);
 
-      const holdTarget = ltp + Math.round(timeValue * 0.6);
-      const stopLoss = Math.round(ltp * 0.75);
+      let bias = timeValue<40?'<span class="green">ITM / Low IV – Safer Buy</span>':'<span class="red">High Time Value – Risky for Buying</span>';
 
-      let bias = '';
-      if (timeValue < 40) bias = '<span class="green">ITM / Low IV – Safer Buy</span>';
-      else bias = '<span class="red">High Time Value – Risky for Buying</span>';
-
-      document.getElementById('result').style.display = 'block';
-      document.getElementById('result').innerHTML = `
-        <h3>📈 Simulation Result</h3>
-        <p><b>Intrinsic Value:</b> ${intrinsic}</p>
-        <p><b>Time Value:</b> ${timeValue}</p>
-        <p><b>Market Bias:</b> ${bias}</p>
-        <hr />
-        <p><b>✅ Ideal Buy Zone:</b> ${idealBuyLow} – ${idealBuyHigh}</p>
-        <p><b>🎯 Hold Target:</b> ${holdTarget}</p>
-        <p><b>🛑 Stop Loss:</b> ${stopLoss}</p>
-        <hr />
-        <p><i>Educational simulation only. Not financial advice.</i></p>
+      // Display result
+      document.getElementById('result').style.display='block';
+      document.getElementById('result').innerHTML=`
+        <h3>Market Overview</h3>
+        <p>Last Close: ${lastClose}</p>
+        <p>Trend: ${trend}</p>
+        <p>Expected Range Today: ${expectedLow} - ${expectedHigh}</p>
+        <hr>
+        <h3>Option Analysis</h3>
+        <p>Intrinsic Value: ${intrinsic}</p>
+        <p>Time Value: ${timeValue} (${ivNote})</p>
+        <p>Delta (Est.): ${delta.toFixed(2)}</p>
+        <p>Theta: ${theta}/day</p>
+        <p>Market Bias: ${bias}</p>
+        <hr>
+        <h3>Summary & Recommendation</h3>
+        <p>Ideal Buy Zone: ${buyLow} - ${buyHigh}</p>
+        <p>Hold Target: ${holdTarget}</p>
+        <p>Stop Loss: ${stopLoss}</p>
       `;
+
+      // Chart
+      const ctx = document.getElementById('rangeChart').getContext('2d');
+      if(window.myChart) window.myChart.destroy();
+      window.myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels:['Expected Low','Spot','Expected High'],
+          datasets:[{
+            label:'NIFTY Range',
+            data:[expectedLow, spot, expectedHigh],
+            backgroundColor:['#60a5fa','#2563eb','#22c55e']
+          }]
+        },
+        options:{
+          scales:{y:{beginAtZero:false}},
+          plugins:{legend:{display:false}}
+        }
+      });
     }
   </script>
 </body>
