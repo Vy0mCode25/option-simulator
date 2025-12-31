@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NIFTY Option Purchase Simulator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 20px;
+    }
+    .card {
+      max-width: 600px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; }
+    label { font-weight: bold; }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0 15px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background: #1e40af; }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+    .green { color: green; font-weight: bold; }
+    .red { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📊 Option Purchase Simulator</h2>
+
+    <label>NIFTY Spot (Open Price)</label>
+    <input type="number" id="spot" placeholder="e.g. 26200" />
+
+    <label>Strike Price</label>
+    <input type="number" id="strike" placeholder="e.g. 26100" />
+
+    <label>Option Type</label>
+    <select id="type">
+      <option value="CE">Call (CE)</option>
+      <option value="PE">Put (PE)</option>
+    </select>
+
+    <label>Option LTP (Current Premium)</label>
+    <input type="number" id="ltp" placeholder="e.g. 150" />
+
+    <button onclick="analyze()">Run Simulation</button>
+
+    <div class="result" id="result" style="display:none"></div>
+  </div>
+
+  <script>
+    function analyze() {
+      const spot = parseFloat(document.getElementById('spot').value);
+      const strike = parseFloat(document.getElementById('strike').value);
+      const ltp = parseFloat(document.getElementById('ltp').value);
+      const type = document.getElementById('type').value;
+
+      if (isNaN(spot) || isNaN(strike) || isNaN(ltp)) {
+        alert('Please fill all fields');
+        return;
+      }
+
+      let intrinsic = 0;
+      if (type === 'CE') intrinsic = Math.max(spot - strike, 0);
+      else intrinsic = Math.max(strike - spot, 0);
+
+      let timeValue = ltp - intrinsic;
+      if (timeValue < 0) timeValue = 0;
+
+      const idealBuyLow = Math.max(ltp - 20, intrinsic + 5);
+      const idealBuyHigh = Math.max(ltp - 5, intrinsic + 10);
+
+      const holdTarget = ltp + Math.round(timeValue * 0.6);
+      const stopLoss = Math.round(ltp * 0.75);
+
+      let bias = '';
+      if (timeValue < 40) bias = '<span class="green">ITM / Low IV – Safer Buy</span>';
+      else bias = '<span class="red">High Time Value – Risky for Buying</span>';
+
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('result').innerHTML = `
+        <h3>📈 Simulation Result</h3>
+        <p><b>Intrinsic Value:</b> ${intrinsic}</p>
+        <p><b>Time Value:</b> ${timeValue}</p>
+        <p><b>Market Bias:</b> ${bias}</p>
+        <hr />
+        <p><b>✅ Ideal Buy Zone:</b> ${idealBuyLow} – ${idealBuyHigh}</p>
+        <p><b>🎯 Hold Target:</b> ${holdTarget}</p>
+        <p><b>🛑 Stop Loss:</b> ${stopLoss}</p>
+        <hr />
+        <p><i>Educational simulation only. Not financial advice.</i></p>
+      `;
+    }
+  </script>
+</body>
+</html>
